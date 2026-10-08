@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+pydantic
+numpy
+scipy
+pandas
+scikit-learn==1.7.2
+joblib
+lime
+pytesseract
+pillow
+httpx
+beautifulsoup4
+lxml
+python-multipart
