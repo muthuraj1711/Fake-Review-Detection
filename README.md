@@ -70,3 +70,8 @@ cd D:\path\to\Fake-Review-Detection-main\backend
 cd D:\path\to\Fake-Review-Detection-main\frontend
 npm run dev
 ```
+```powershell
+git add <files-to-include>
+git commit -m "Your commit message"
+git push origin main
+```
