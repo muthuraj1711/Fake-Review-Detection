@@ -15,7 +15,7 @@ async function request(path, options = {}) {
   if (!response.ok) {
     throw new Error(
       data.detail
-        ? JSON.stringify(data.detail)
+        ? typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)
         : `Request failed (${response.status})`
     );
   }

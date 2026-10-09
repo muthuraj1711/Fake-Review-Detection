@@ -12,4 +12,5 @@ pillow
 httpx
 beautifulsoup4
 lxml
+playwright
 python-multipart

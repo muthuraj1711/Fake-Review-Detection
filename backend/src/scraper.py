@@ -61,6 +61,24 @@ def _flipkart_review_url(url: str) -> str:
     )
 
 
+def _amazon_review_url(url: str, asin: str) -> str:
+    """Build the review listing on the same Amazon marketplace as the input."""
+    parsed = urlparse(url)
+    host = parsed.netloc or "www.amazon.com"
+    # Preserve the marketplace domain while avoiding credentials or port data.
+    host = host.rsplit("@", 1)[-1].split(":", 1)[0]
+    return f"https://{host}/product-reviews/{asin}?reviewerType=all_reviews&pageNumber=1"
+
+
+def _is_amazon_sign_in_page(url: str, html: str) -> bool:
+    parsed = urlparse(url)
+    if re.search(r"/(?:ap/)?signin(?:/|$)", parsed.path, re.I):
+        return True
+    soup = BeautifulSoup(html, "lxml")
+    title = soup.title.get_text(" ", strip=True).lower() if soup.title else ""
+    return "sign in" in title and "amazon" in title
+
+
 def _json_ld(soup: BeautifulSoup) -> list[dict[str, Any]]:
     results = []
 
@@ -670,6 +688,13 @@ async def scrape_with_browser(
 
             html = await page.content()
 
+            if site == "amazon" and _is_amazon_sign_in_page(page.url, html):
+                raise ValueError(
+                    "Amazon redirected this request to its sign-in page, so reviews are unavailable. "
+                    "Open the product in your browser and check whether Amazon requires you to sign in, "
+                    "then try again."
+                )
+
             result = _parse_page(
                 html,
                 page.url
@@ -678,13 +703,28 @@ async def scrape_with_browser(
             # Product pages often render no review cards while the dedicated
             # review listing does. Try that first-party page as a fallback.
             if site == "amazon" and not result.get("review_details"):
-                asin = re.search(r"/(?:dp|gp/product|product-reviews)/([A-Z0-9]{10})", page.url, re.I)
+                # Short Amazon links (for example, amzn.in/d/...) only reveal
+                # the ASIN after the browser follows their redirect.
+                asin = re.search(
+                    r"/(?:dp|gp/product|product-reviews|gp/aw/d)/([A-Z0-9]{10})",
+                    page.url,
+                    re.I,
+                )
                 if asin:
-                    reviews_url = f"https://www.amazon.in/product-reviews/{asin.group(1)}?reviewerType=all_reviews&pageNumber=1"
+                    reviews_url = _amazon_review_url(page.url, asin.group(1))
                     try:
                         await page.goto(reviews_url, wait_until="domcontentloaded", timeout=20000)
                         await page.wait_for_timeout(2500)
-                        result = _parse_page(await page.content(), page.url)
+                        html = await page.content()
+                        if _is_amazon_sign_in_page(page.url, html):
+                            raise ValueError(
+                                "Amazon redirected this request to its sign-in page, so reviews are unavailable. "
+                                "Open the product in your browser and check whether Amazon requires you to sign in, "
+                                "then try again."
+                            )
+                        result = _parse_page(html, page.url)
+                    except ValueError:
+                        raise
                     except Exception:
                         pass
 
